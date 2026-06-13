@@ -14,12 +14,14 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: #f5f0eb; color: #2c2c2c; height: 100vh; display: flex; flex-direction: column;
       -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
     }
-    /* 启动遮罩：消除闪屏 */
+    /* 启动遮罩：彻底消除闪屏 */
     #splash-screen {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #f5f0eb; z-index: 9999; display: flex;
-      align-items: center; justify-content: center; font-size: 1.5rem; color: #4a3f35;
+      align-items: center; justify-content: center; font-size: 2rem; color: #4a3f35;
+      transition: opacity 0.3s ease;
     }
     #setup-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f0eb;
@@ -79,7 +81,7 @@
 </head>
 <body>
 
-<!-- 启动遮罩 -->
+<!-- 启动遮罩：至少展示1.2秒，彻底盖住加载过程 -->
 <div id="splash-screen">✨</div>
 
 <div id="setup-overlay">
@@ -144,64 +146,73 @@
   const statusEl = document.getElementById('status');
   const pwaBar = document.getElementById('pwa-bar');
 
-  // 平滑打字机效果渲染引擎
-  let typewriterTimer = null;
-  let targetText = '';
-  let currentText = '';
-  let assistantBubbleRef = null;
+  // ========== 流畅打字机渲染引擎（requestAnimationFrame） ==========
+  let typewriterFrameId = null;
+  let typewriterTarget = '';
+  let typewriterCurrent = '';
+  let typewriterBubble = null;
+  let typewriterLastTime = 0;
+  const TYPEWRITER_INTERVAL = 30; // 毫秒/字符，恒定速度
 
-  function smoothTypewriter(bubble, text) {
-    // 清除旧的定时器
-    if (typewriterTimer) {
-      clearInterval(typewriterTimer);
-      typewriterTimer = null;
-    }
+  function startTypewriter(bubble, fullText) {
+    stopTypewriter();
+    typewriterTarget = fullText;
+    typewriterCurrent = '';
+    typewriterBubble = bubble;
+    typewriterLastTime = performance.now();
+    requestAnimationFrame(renderTypewriter);
+  }
 
-    targetText = text;
-    currentText = '';
-    assistantBubbleRef = bubble;
-
-    const totalChars = targetText.length;
-    // 根据总长度动态调整速度：前快后稍慢，但整体平滑
-    const baseInterval = totalChars > 200 ? 25 : 20;
-    let index = 0;
-
-    typewriterTimer = setInterval(() => {
-      if (index < targetText.length) {
-        currentText += targetText[index];
-        if (assistantBubbleRef) {
-          assistantBubbleRef.textContent = currentText;
+  function renderTypewriter(timestamp) {
+    if (!typewriterTarget || !typewriterBubble) return;
+    
+    if (timestamp - typewriterLastTime >= TYPEWRITER_INTERVAL) {
+      typewriterLastTime = timestamp;
+      if (typewriterCurrent.length < typewriterTarget.length) {
+        typewriterCurrent += typewriterTarget[typewriterCurrent.length];
+        if (typewriterBubble) {
+          typewriterBubble.textContent = typewriterCurrent;
         }
         chatLog.scrollTop = chatLog.scrollHeight;
-        index++;
-      } else {
-        // 完成，清除定时器
-        if (typewriterTimer) {
-          clearInterval(typewriterTimer);
-          typewriterTimer = null;
-        }
       }
-    }, baseInterval);
+    }
+
+    if (typewriterCurrent.length < typewriterTarget.length) {
+      typewriterFrameId = requestAnimationFrame(renderTypewriter);
+    } else {
+      stopTypewriter();
+    }
   }
 
   function stopTypewriter() {
-    if (typewriterTimer) {
-      clearInterval(typewriterTimer);
-      typewriterTimer = null;
+    if (typewriterFrameId) {
+      cancelAnimationFrame(typewriterFrameId);
+      typewriterFrameId = null;
     }
-    // 直接显示全部文本
-    if (assistantBubbleRef && targetText) {
-      assistantBubbleRef.textContent = targetText;
+    if (typewriterTarget && typewriterBubble) {
+      typewriterBubble.textContent = typewriterTarget;
     }
+    typewriterTarget = '';
+    typewriterCurrent = '';
+    typewriterBubble = null;
   }
 
   function init() {
-    // 移除启动遮罩
-    if (splashScreen) {
+    // 启动遮罩：最少展示1.2秒，确保完全盖住加载过程
+    const splashStart = Date.now();
+    function hideSplash() {
+      const elapsed = Date.now() - splashStart;
+      const remaining = Math.max(0, 1200 - elapsed);
       setTimeout(() => {
-        splashScreen.style.display = 'none';
-      }, 500);
+        if (splashScreen) {
+          splashScreen.style.opacity = '0';
+          setTimeout(() => {
+            if (splashScreen) splashScreen.style.display = 'none';
+          }, 300);
+        }
+      }, remaining);
     }
+    hideSplash();
 
     const savedKey = getApiKey();
     if (savedKey) {
@@ -313,8 +324,7 @@
               const delta = data.choices[0].delta;
               if (delta && delta.content) {
                 fullReply += delta.content;
-                // 使用平滑打字机渲染
-                smoothTypewriter(assistantBubble, fullReply);
+                startTypewriter(assistantBubble, fullReply);
                 setStatus('');
               }
             } catch(e) {}
