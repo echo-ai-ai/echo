@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- 强制黑色启动背景，随后由我们的米色遮罩接管，彻底根治白屏残影 -->
   <meta name="theme-color" content="#f5f0eb">
   <title>回声</title>
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22short_name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f5f0eb%22%2C%22theme_color%22%3A%22%23f5f0eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Ccircle%20cx%3D'50'%20cy%3D'50'%20r%3D'48'%20fill%3D'%23f5f0eb'%20stroke%3D'%23d4c5b9'%20stroke-width%3D'3'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2028%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2055%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
@@ -16,12 +17,17 @@
       -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
       overscroll-behavior: none;
     }
-    /* 启动遮罩：彻底消除闪屏 */
+    /* 启动遮罩：带呼吸动效，柔和接管 */
     #splash-screen {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #f5f0eb; z-index: 9999; display: flex;
       align-items: center; justify-content: center; font-size: 2rem; color: #4a3f35;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.4s ease; opacity: 1;
+      animation: breathe 2s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
     }
     #setup-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f0eb;
@@ -81,7 +87,7 @@
 </head>
 <body>
 
-<!-- 启动遮罩：至少展示1.2秒，彻底盖住加载过程 -->
+<!-- 柔和呼吸遮罩 -->
 <div id="splash-screen">✨</div>
 
 <div id="setup-overlay">
@@ -146,69 +152,48 @@
   const statusEl = document.getElementById('status');
   const pwaBar = document.getElementById('pwa-bar');
 
-  // ========== 流畅打字机渲染引擎（requestAnimationFrame） ==========
-  let typewriterFrameId = null;
-  let typewriterTarget = '';
-  let typewriterCurrent = '';
-  let typewriterBubble = null;
-  let typewriterLastTime = 0;
-  const TYPEWRITER_INTERVAL = 30; // 毫秒/字符，恒定速度
+  let isTyping = false; // 防止打字机冲突
 
-  function startTypewriter(bubble, fullText) {
-    stopTypewriter();
-    typewriterTarget = fullText;
-    typewriterCurrent = '';
-    typewriterBubble = bubble;
-    typewriterLastTime = performance.now();
-    requestAnimationFrame(renderTypewriter);
-  }
-
-  function renderTypewriter(timestamp) {
-    if (!typewriterTarget || !typewriterBubble) return;
+  // ========== 优雅的真人韵律打字机 ==========
+  function elegantTypewriter(bubble, fullText) {
+    if (isTyping) {
+      // 若已有打字机在进行，直接显示全文，避免重叠
+      bubble.textContent = fullText;
+      return;
+    }
     
-    if (timestamp - typewriterLastTime >= TYPEWRITER_INTERVAL) {
-      typewriterLastTime = timestamp;
-      if (typewriterCurrent.length < typewriterTarget.length) {
-        typewriterCurrent += typewriterTarget[typewriterCurrent.length];
-        if (typewriterBubble) {
-          typewriterBubble.textContent = typewriterCurrent;
-        }
+    isTyping = true;
+    let index = 0;
+    const baseDelay = 25;
+    const variance = 15; // 增加韵律感
+
+    function typeNextChar() {
+      if (index < fullText.length) {
+        bubble.textContent = fullText.substring(0, index + 1);
         chatLog.scrollTop = chatLog.scrollHeight;
+        index++;
+        const randomDelay = baseDelay + Math.random() * variance;
+        setTimeout(typeNextChar, randomDelay);
+      } else {
+        isTyping = false;
       }
     }
-
-    if (typewriterCurrent.length < typewriterTarget.length) {
-      typewriterFrameId = requestAnimationFrame(renderTypewriter);
-    } else {
-      stopTypewriter();
-    }
-  }
-
-  function stopTypewriter() {
-    if (typewriterFrameId) {
-      cancelAnimationFrame(typewriterFrameId);
-      typewriterFrameId = null;
-    }
-    if (typewriterTarget && typewriterBubble) {
-      typewriterBubble.textContent = typewriterTarget;
-    }
-    typewriterTarget = '';
-    typewriterCurrent = '';
-    typewriterBubble = null;
+    typeNextChar();
   }
 
   function init() {
-    // 启动遮罩：最少展示1.2秒，确保完全盖住加载过程
-    const splashStart = Date.now();
+    // 启动遮罩：最少展示1.5秒，确保完全覆盖加载
+    const minSplashTime = 1500;
+    const startTime = Date.now();
     function hideSplash() {
-      const elapsed = Date.now() - splashStart;
-      const remaining = Math.max(0, 1200 - elapsed);
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, minSplashTime - elapsed);
       setTimeout(() => {
         if (splashScreen) {
           splashScreen.style.opacity = '0';
           setTimeout(() => {
             if (splashScreen) splashScreen.style.display = 'none';
-          }, 300);
+          }, 400);
         }
       }, remaining);
     }
@@ -324,7 +309,7 @@
               const delta = data.choices[0].delta;
               if (delta && delta.content) {
                 fullReply += delta.content;
-                startTypewriter(assistantBubble, fullReply);
+                elegantTypewriter(assistantBubble, fullReply);
                 setStatus('');
               }
             } catch(e) {}
@@ -336,8 +321,9 @@
       saveChatHistory(chatHistory);
       setStatus('');
     } catch (e) {
-      stopTypewriter();
-      assistantBubble.textContent = `我稍微走了一下神… ${e.message}`;
+      // 弱网或异常时，停止打字机并显示温和提示
+      isTyping = false;
+      assistantBubble.textContent = `我好像走神了… 可能是网络不太好，你等等我再试试。`;
       setStatus('');
     } finally {
       sendBtn.disabled = false;
