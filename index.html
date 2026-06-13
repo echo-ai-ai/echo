@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" style="background: #f5f0eb;">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <!-- 强制黑色启动背景，随后由我们的米色遮罩接管，彻底根治白屏残影 -->
   <meta name="theme-color" content="#f5f0eb">
   <title>回声</title>
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22short_name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f5f0eb%22%2C%22theme_color%22%3A%22%23f5f0eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Ccircle%20cx%3D'50'%20cy%3D'50'%20r%3D'48'%20fill%3D'%23f5f0eb'%20stroke%3D'%23d4c5b9'%20stroke-width%3D'3'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2028%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2055%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
@@ -17,17 +16,12 @@
       -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
       overscroll-behavior: none;
     }
-    /* 启动遮罩：带呼吸动效，柔和接管 */
+    /* 物理级防刷屏遮罩：同步渲染，第一时间盖住 */
     #splash-screen {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #f5f0eb; z-index: 9999; display: flex;
+      background: #f5f0eb; z-index: 10000; display: flex;
       align-items: center; justify-content: center; font-size: 2rem; color: #4a3f35;
-      transition: opacity 0.4s ease; opacity: 1;
-      animation: breathe 2s ease-in-out infinite;
-    }
-    @keyframes breathe {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
+      transition: opacity 0.4s ease;
     }
     #setup-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f0eb;
@@ -87,7 +81,7 @@
 </head>
 <body>
 
-<!-- 柔和呼吸遮罩 -->
+<!-- 物理防刷屏遮罩 -->
 <div id="splash-screen">✨</div>
 
 <div id="setup-overlay">
@@ -152,42 +146,70 @@
   const statusEl = document.getElementById('status');
   const pwaBar = document.getElementById('pwa-bar');
 
-  let isTyping = false; // 防止打字机冲突
+  // ========== 解耦式流畅打字机 ==========
+  let charQueue = [];           // 字符队列
+  let typewriterTimer = null;
+  let activeBubble = null;
+  let isTypewriterRunning = false;
+  const BASE_DELAY = 30;        // 基础间隔ms
+  const VARIANCE = 15;          // 随机变化幅度
 
-  // ========== 优雅的真人韵律打字机 ==========
-  function elegantTypewriter(bubble, fullText) {
-    if (isTyping) {
-      // 若已有打字机在进行，直接显示全文，避免重叠
-      bubble.textContent = fullText;
-      return;
-    }
-    
-    isTyping = true;
-    let index = 0;
-    const baseDelay = 25;
-    const variance = 15; // 增加韵律感
-
-    function typeNextChar() {
-      if (index < fullText.length) {
-        bubble.textContent = fullText.substring(0, index + 1);
-        chatLog.scrollTop = chatLog.scrollHeight;
-        index++;
-        const randomDelay = baseDelay + Math.random() * variance;
-        setTimeout(typeNextChar, randomDelay);
-      } else {
-        isTyping = false;
-      }
-    }
+  function startTypewriter(bubble) {
+    // 如果已有打字机在运行，先停止
+    stopTypewriter();
+    activeBubble = bubble;
+    isTypewriterRunning = true;
     typeNextChar();
   }
 
+  function typeNextChar() {
+    if (!isTypewriterRunning || !activeBubble) return;
+    
+    if (charQueue.length > 0) {
+      const char = charQueue.shift();
+      activeBubble.textContent += char;
+      chatLog.scrollTop = chatLog.scrollHeight;
+      
+      // 随机延迟，模拟真人韵律
+      const delay = BASE_DELAY + Math.random() * VARIANCE;
+      typewriterTimer = setTimeout(typeNextChar, delay);
+    } else {
+      // 队列空，暂停定时器，等待新字符加入时再唤醒
+      typewriterTimer = null;
+    }
+  }
+
+  function pushChars(text) {
+    // 将新文本拆成字符加入队列
+    for (const char of text) {
+      charQueue.push(char);
+    }
+    // 如果打字机未运行，启动它
+    if (!isTypewriterRunning && activeBubble) {
+      isTypewriterRunning = true;
+      typeNextChar();
+    } else if (!typewriterTimer && isTypewriterRunning && charQueue.length > 0) {
+      // 如果定时器停了但队列有内容，重启
+      typeNextChar();
+    }
+  }
+
+  function stopTypewriter(finalText = '') {
+    if (typewriterTimer) {
+      clearTimeout(typewriterTimer);
+      typewriterTimer = null;
+    }
+    if (activeBubble && finalText) {
+      activeBubble.textContent = finalText;
+    }
+    charQueue = [];
+    isTypewriterRunning = false;
+    activeBubble = null;
+  }
+
   function init() {
-    // 启动遮罩：最少展示1.5秒，确保完全覆盖加载
-    const minSplashTime = 1500;
-    const startTime = Date.now();
-    function hideSplash() {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, minSplashTime - elapsed);
+    // 启动遮罩：确保页面内容加载完成后再淡出，彻底消除闪屏
+    window.addEventListener('load', () => {
       setTimeout(() => {
         if (splashScreen) {
           splashScreen.style.opacity = '0';
@@ -195,9 +217,8 @@
             if (splashScreen) splashScreen.style.display = 'none';
           }, 400);
         }
-      }, remaining);
-    }
-    hideSplash();
+      }, 600); // 给足渲染时间
+    });
 
     const savedKey = getApiKey();
     if (savedKey) {
@@ -258,6 +279,9 @@
     chatLog.appendChild(assistantBubble);
     chatLog.scrollTop = chatLog.scrollHeight;
 
+    // 启动打字机（此时队列为空，等待字符推入）
+    startTypewriter(assistantBubble);
+
     const chatHistory = getChatHistory();
     chatHistory.push({ role: 'user', content: content });
     saveChatHistory(chatHistory);
@@ -309,7 +333,8 @@
               const delta = data.choices[0].delta;
               if (delta && delta.content) {
                 fullReply += delta.content;
-                elegantTypewriter(assistantBubble, fullReply);
+                // 只推入新增的字符到队列，不打乱节奏
+                pushChars(delta.content);
                 setStatus('');
               }
             } catch(e) {}
@@ -317,12 +342,17 @@
         }
       }
 
+      // 等待队列消费完毕
+      while (charQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      stopTypewriter(fullReply);
+
       chatHistory.push({ role: 'assistant', content: fullReply });
       saveChatHistory(chatHistory);
       setStatus('');
     } catch (e) {
-      // 弱网或异常时，停止打字机并显示温和提示
-      isTyping = false;
+      stopTypewriter(assistantBubble.textContent || '');
       assistantBubble.textContent = `我好像走神了… 可能是网络不太好，你等等我再试试。`;
       setStatus('');
     } finally {
