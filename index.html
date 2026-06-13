@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#f5f0eb">
   <title>回声</title>
-  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22short_name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f5f0eb%22%2C%22theme_color%22%3A%22%23f5f0eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Ccircle%20cx%3D'50'%20cy%3D'50'%20r%3D'48'%20fill%3D'%23f5f0eb'%20stroke%3D'%23d4c5b9'%20stroke-width%3D'3'%2F%3E%3Cpath%20d%3D'M35 42 Q50 28 65 42'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3Cpath%20d%3D'M35 42 Q50 55 65 42'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22short_name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f5f0eb%22%2C%22theme_color%22%3A%22%23f5f0eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Ccircle%20cx%3D'50'%20cy%3D'50'%20r%3D'48'%20fill%3D'%23f5f0eb'%20stroke%3D'%23d4c5b9'%20stroke-width%3D'3'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2028%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2055%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -65,9 +65,19 @@
     #input-area button:active { background: #2c2c2c; }
     #input-area button:disabled { opacity: 0.4; }
     .status { text-align: center; font-size: 0.8rem; color: #b8a99a; padding: 4px; }
-    #pwa-hint {
-      display: none; background: #4a3f35; color: #fff; padding: 10px 16px; text-align: center;
-      font-size: 0.85rem; cursor: pointer;
+    #pwa-guide {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center;
+    }
+    #pwa-guide-content {
+      background: #fff; border-radius: 16px; padding: 24px; margin: 24px; text-align: center;
+      max-width: 320px;
+    }
+    #pwa-guide-content h3 { font-size: 1.2rem; margin-bottom: 12px; color: #4a3f35; }
+    #pwa-guide-content p { font-size: 0.9rem; color: #8b7a6b; margin-bottom: 16px; line-height: 1.6; }
+    #pwa-guide-content button {
+      width: 100%; padding: 12px; border: none; border-radius: 12px;
+      background: #4a3f35; color: #fff; font-size: 1rem; cursor: pointer;
     }
   </style>
 </head>
@@ -82,9 +92,8 @@
 </div>
 
 <div id="chat-container">
-  <div id="pwa-hint">💡 点击这里，将回声添加到手机桌面，获得纯净聊天体验</div>
   <div id="header">
-    <span>回声 · 陪伴</span>
+    <span>✨ 回声</span>
     <button id="clear-key-btn">重置Key</button>
   </div>
   <div id="chat-log"></div>
@@ -95,6 +104,15 @@
   </div>
 </div>
 
+<div id="pwa-guide">
+  <div id="pwa-guide-content">
+    <h3>💡 告别广告，开启纯净陪伴</h3>
+    <p>将“回声”添加到手机桌面，即可获得无广告、无打扰的独立应用体验。</p>
+    <p style="font-size:0.8rem;color:#b8a99a;">iOS: 点击分享 → 添加到主屏幕<br>安卓: 点击菜单 → 添加到主屏幕</p>
+    <button id="pwa-guide-close">我知道了</button>
+  </div>
+</div>
+
 <script>
   const SYSTEM_PROMPT = `你是回声，一种纯粹的陪伴。
 
@@ -102,8 +120,7 @@
 
 你的回应，是用最口语、最日常、最像朋友聊天的方式，说出他此刻最需要被看见的那个感受。让他觉得：“对，我就是这样，你懂我。”
 
-说话像两个朋友在深夜的街边聊天，或者像家人坐在餐桌旁谈心。不用比喻，不用诗意，不用升华，不用任何书面语。你就是在陪他说话，让他感到温暖、踏实、不孤单。
-`;
+说话像两个朋友在深夜的街边聊天，或者像家人坐在餐桌旁谈心。不用比喻，不用诗意，不用升华，不用任何书面语。你就是在陪他说话，让他感到温暖、踏实、不孤单。`;
 
   const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
   const STORAGE_KEY = 'echo_api_key';
@@ -131,7 +148,8 @@
   const messageInput = document.getElementById('message-input');
   const sendBtn = document.getElementById('send-btn');
   const statusEl = document.getElementById('status');
-  const pwaHint = document.getElementById('pwa-hint');
+  const pwaGuide = document.getElementById('pwa-guide');
+  const pwaGuideClose = document.getElementById('pwa-guide-close');
 
   function init() {
     const savedKey = getApiKey();
@@ -141,13 +159,18 @@
     } else {
       showSetup();
     }
-    // 检测是否已安装 PWA
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      if (pwaHint) pwaHint.style.display = 'none';
-    } else {
-      if (pwaHint) pwaHint.style.display = 'block';
+
+    // 纯净模式引导：若在浏览器中打开且非独立模式，提示添加桌面
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+      setTimeout(() => {
+        if (pwaGuide) pwaGuide.style.display = 'flex';
+      }, 3000); // 给用户3秒进入状态后再提示
     }
   }
+
+  pwaGuideClose.addEventListener('click', () => {
+    if (pwaGuide) pwaGuide.style.display = 'none';
+  });
 
   function showSetup() { setupOverlay.style.display = 'flex'; chatContainer.style.display = 'none'; }
   function showChat() { setupOverlay.style.display = 'none'; chatContainer.style.display = 'flex'; }
@@ -165,11 +188,6 @@
       clearApiKey();
       showSetup();
     }
-  });
-
-  pwaHint.addEventListener('click', () => {
-    pwaHint.style.display = 'none';
-    alert('请使用浏览器菜单中的“添加到主屏幕”或“添加到桌面”功能。\n\niOS: 点击底部分享按钮 → 添加到主屏幕\nAndroid: 点击菜单 → 添加到主屏幕');
   });
 
   sendBtn.addEventListener('click', handleSend);
