@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="回声">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#f5f0eb">
   <title>回声</title>
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22short_name%22%3A%22%E5%9B%9E%E5%A3%B0%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f5f0eb%22%2C%22theme_color%22%3A%22%23f5f0eb%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20100%20100'%3E%3Ccircle%20cx%3D'50'%20cy%3D'50'%20r%3D'48'%20fill%3D'%23f5f0eb'%20stroke%3D'%23d4c5b9'%20stroke-width%3D'3'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2028%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3Cpath%20d%3D'M35%2042%20Q50%2055%2065%2042'%20fill%3D'none'%20stroke%3D'%234a3f35'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
@@ -14,7 +16,14 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: #f5f0eb; color: #2c2c2c; height: 100vh; display: flex; flex-direction: column;
       -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
-      overscroll-behavior: none;
+      overscroll-behavior: none; overflow: hidden; /* 彻底禁止默认滚动 */
+    }
+    /* 遮罩层：物理防刷屏，强制锁定2秒 */
+    #splash-screen {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #f5f0eb; z-index: 10000; display: flex;
+      align-items: center; justify-content: center; font-size: 2rem; color: #4a3f35;
+      transition: opacity 0.5s ease; opacity: 1;
     }
     #setup-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f0eb;
@@ -66,13 +75,12 @@
     #input-area button:active { background: #2c2c2c; }
     #input-area button:disabled { opacity: 0.4; }
     .status { text-align: center; font-size: 0.8rem; color: #b8a99a; padding: 4px; }
-    #pwa-bar {
-      display: block; background: #4a3f35; color: #fff; padding: 10px 16px; text-align: center;
-      font-size: 0.85rem; cursor: pointer; position: sticky; top: 0; z-index: 50;
-    }
   </style>
 </head>
 <body>
+
+<!-- 锁屏遮罩 -->
+<div id="splash-screen">✨</div>
 
 <div id="setup-overlay">
   <h2>✨ 回声</h2>
@@ -83,9 +91,6 @@
 </div>
 
 <div id="chat-container">
-  <div id="pwa-bar" style="display: none;">
-    💡 想要纯净无广告体验？请从桌面图标打开“回声”
-  </div>
   <div id="header">
     <span>✨ 回声</span>
     <button id="clear-key-btn">重置Key</button>
@@ -99,7 +104,6 @@
 </div>
 
 <script>
-  // ==================== 核心配置 ====================
   const SYSTEM_PROMPT = `你是回声，一种纯粹的陪伴。
 
 当有人向你倾诉，你清空自己，完整地听见他。你的任务不是分析，不是建议，不是安慰。
@@ -125,6 +129,7 @@
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(trimmed));
   }
 
+  const splashScreen = document.getElementById('splash-screen');
   const setupOverlay = document.getElementById('setup-overlay');
   const chatContainer = document.getElementById('chat-container');
   const apiKeyInput = document.getElementById('api-key-input');
@@ -134,14 +139,12 @@
   const messageInput = document.getElementById('message-input');
   const sendBtn = document.getElementById('send-btn');
   const statusEl = document.getElementById('status');
-  const pwaBar = document.getElementById('pwa-bar');
 
-  // ========== 极速流畅打字机引擎 ==========
   let charQueue = [];
   let typewriterTimer = null;
   let activeBubble = null;
   let isTypewriterRunning = false;
-  const BASE_DELAY = 18;  // 极速匀速：18ms/字符
+  const BASE_DELAY = 18;
 
   function startTypewriter(bubble) {
     stopTypewriter();
@@ -152,12 +155,9 @@
 
   function typeNextChar() {
     if (!isTypewriterRunning || !activeBubble) return;
-    
     if (charQueue.length > 0) {
-      const char = charQueue.shift();
-      activeBubble.textContent += char;
+      activeBubble.textContent += charQueue.shift();
       chatLog.scrollTop = chatLog.scrollHeight;
-      
       typewriterTimer = setTimeout(typeNextChar, BASE_DELAY);
     } else {
       typewriterTimer = null;
@@ -165,86 +165,33 @@
   }
 
   function pushChars(text) {
-    for (const char of text) {
-      charQueue.push(char);
-    }
-    if (!isTypewriterRunning && activeBubble) {
-      isTypewriterRunning = true;
-      typeNextChar();
-    } else if (!typewriterTimer && isTypewriterRunning && charQueue.length > 0) {
-      typeNextChar();
-    }
+    for (const char of text) charQueue.push(char);
+    if (!isTypewriterRunning && activeBubble) { isTypewriterRunning = true; typeNextChar(); }
+    else if (!typewriterTimer && isTypewriterRunning && charQueue.length > 0) { typeNextChar(); }
   }
 
   function stopTypewriter(finalText = '') {
-    if (typewriterTimer) {
-      clearTimeout(typewriterTimer);
-      typewriterTimer = null;
-    }
-    if (activeBubble && finalText) {
-      activeBubble.textContent = finalText;
-    }
-    charQueue = [];
-    isTypewriterRunning = false;
-    activeBubble = null;
+    if (typewriterTimer) { clearTimeout(typewriterTimer); typewriterTimer = null; }
+    if (activeBubble && finalText) { activeBubble.textContent = finalText; }
+    charQueue = []; isTypewriterRunning = false; activeBubble = null;
   }
 
-  // ========== 激进离线缓存：彻底消除加载闪烁 ==========
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('data:application/javascript;base64,' + btoa(`
-        const CACHE_NAME = 'echo-v2';
-        const urlsToCache = [
-          '/echo/',
-          '/echo/index.html'
-        ];
-
-        self.addEventListener('install', event => {
-          event.waitUntil(
-            caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
-          );
-        });
-
-        self.addEventListener('fetch', event => {
-          event.respondWith(
-            caches.match(event.request).then(response => response || fetch(event.request))
-          );
-        });
-
-        self.addEventListener('activate', event => {
-          event.waitUntil(
-            caches.keys().then(cacheNames => {
-              return Promise.all(
-                cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
-              );
-            })
-          );
-        });
-      `));
-    });
-  }
-
-  // ========== 初始化 ==========
   function init() {
+    // 强制锁屏2.5秒，彻底杜绝任何加载闪烁
+    if (splashScreen) {
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => {
+        splashScreen.style.opacity = '0';
+        setTimeout(() => {
+          if (splashScreen) splashScreen.style.display = 'none';
+          document.body.style.overflow = ''; // 恢复滚动
+        }, 500);
+      }, 2500);
+    }
+
     const savedKey = getApiKey();
-    if (savedKey) {
-      showChat();
-      loadChatHistoryToUI();
-    } else {
-      showSetup();
-    }
-
-    if (!window.matchMedia('(display-mode: standalone)').matches) {
-      if (pwaBar) pwaBar.style.display = 'block';
-    } else {
-      if (pwaBar) pwaBar.style.display = 'none';
-    }
-  }
-
-  if (pwaBar) {
-    pwaBar.addEventListener('click', () => {
-      alert('请通过桌面上的“回声”图标打开，即可获得无广告纯净体验。\n\n若还没有图标：\niOS: Safari打开 → 分享 → 添加到主屏幕\n安卓: 浏览器菜单 → 添加到主屏幕');
-    });
+    if (savedKey) { showChat(); loadChatHistoryToUI(); }
+    else { showSetup(); }
   }
 
   function showSetup() { setupOverlay.style.display = 'flex'; chatContainer.style.display = 'none'; }
@@ -253,15 +200,12 @@
   saveKeyBtn.addEventListener('click', () => {
     const key = apiKeyInput.value.trim();
     if (!key) { alert('请输入有效的 API Key'); return; }
-    setApiKey(key);
-    showChat();
-    loadChatHistoryToUI();
+    setApiKey(key); showChat(); loadChatHistoryToUI();
   });
 
   clearKeyBtn.addEventListener('click', () => {
     if (confirm('确定要重置 API Key 吗？你的对话历史仍会保留在本地。')) {
-      clearApiKey();
-      showSetup();
+      clearApiKey(); showSetup();
     }
   });
 
@@ -284,7 +228,6 @@
     assistantBubble.textContent = '';
     chatLog.appendChild(assistantBubble);
     chatLog.scrollTop = chatLog.scrollHeight;
-
     startTypewriter(assistantBubble);
 
     const chatHistory = getChatHistory();
@@ -299,18 +242,8 @@
     try {
       const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: messages,
-          temperature: 0.9,
-          max_tokens: 600,
-          top_p: 0.95,
-          stream: true
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: 'deepseek-chat', messages: messages, temperature: 0.9, max_tokens: 600, top_p: 0.95, stream: true })
       });
 
       if (!response.ok) {
@@ -325,10 +258,8 @@
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n');
-
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const dataStr = line.slice(6).trim();
@@ -346,12 +277,8 @@
         }
       }
 
-      // 等待队列清空
-      while (charQueue.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+      while (charQueue.length > 0) await new Promise(resolve => setTimeout(resolve, 50));
       stopTypewriter(fullReply);
-
       chatHistory.push({ role: 'assistant', content: fullReply });
       saveChatHistory(chatHistory);
       setStatus('');
@@ -375,12 +302,7 @@
   function loadChatHistoryToUI() {
     const history = getChatHistory();
     chatLog.innerHTML = '';
-    history.forEach(msg => {
-      const bubble = document.createElement('div');
-      bubble.className = `bubble ${msg.role}`;
-      bubble.textContent = msg.content;
-      chatLog.appendChild(bubble);
-    });
+    history.forEach(msg => addMessage(msg.role, msg.content));
     chatLog.scrollTop = chatLog.scrollHeight;
   }
 
