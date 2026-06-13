@@ -16,13 +16,6 @@
       -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
       overscroll-behavior: none;
     }
-    /* 物理级防刷屏遮罩：同步渲染，第一时间盖住 */
-    #splash-screen {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #f5f0eb; z-index: 10000; display: flex;
-      align-items: center; justify-content: center; font-size: 2rem; color: #4a3f35;
-      transition: opacity 0.4s ease;
-    }
     #setup-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f5f0eb;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -81,9 +74,6 @@
 </head>
 <body>
 
-<!-- 物理防刷屏遮罩 -->
-<div id="splash-screen">✨</div>
-
 <div id="setup-overlay">
   <h2>✨ 回声</h2>
   <p>你的专属 AI 陪伴。<br>请输入你的 DeepSeek API Key 开始。</p>
@@ -109,6 +99,7 @@
 </div>
 
 <script>
+  // ==================== 核心配置 ====================
   const SYSTEM_PROMPT = `你是回声，一种纯粹的陪伴。
 
 当有人向你倾诉，你清空自己，完整地听见他。你的任务不是分析，不是建议，不是安慰。
@@ -134,7 +125,6 @@
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(trimmed));
   }
 
-  const splashScreen = document.getElementById('splash-screen');
   const setupOverlay = document.getElementById('setup-overlay');
   const chatContainer = document.getElementById('chat-container');
   const apiKeyInput = document.getElementById('api-key-input');
@@ -146,16 +136,14 @@
   const statusEl = document.getElementById('status');
   const pwaBar = document.getElementById('pwa-bar');
 
-  // ========== 解耦式流畅打字机 ==========
-  let charQueue = [];           // 字符队列
+  // ========== 极速流畅打字机引擎 ==========
+  let charQueue = [];
   let typewriterTimer = null;
   let activeBubble = null;
   let isTypewriterRunning = false;
-  const BASE_DELAY = 30;        // 基础间隔ms
-  const VARIANCE = 15;          // 随机变化幅度
+  const BASE_DELAY = 18;  // 极速匀速：18ms/字符
 
   function startTypewriter(bubble) {
-    // 如果已有打字机在运行，先停止
     stopTypewriter();
     activeBubble = bubble;
     isTypewriterRunning = true;
@@ -170,26 +158,20 @@
       activeBubble.textContent += char;
       chatLog.scrollTop = chatLog.scrollHeight;
       
-      // 随机延迟，模拟真人韵律
-      const delay = BASE_DELAY + Math.random() * VARIANCE;
-      typewriterTimer = setTimeout(typeNextChar, delay);
+      typewriterTimer = setTimeout(typeNextChar, BASE_DELAY);
     } else {
-      // 队列空，暂停定时器，等待新字符加入时再唤醒
       typewriterTimer = null;
     }
   }
 
   function pushChars(text) {
-    // 将新文本拆成字符加入队列
     for (const char of text) {
       charQueue.push(char);
     }
-    // 如果打字机未运行，启动它
     if (!isTypewriterRunning && activeBubble) {
       isTypewriterRunning = true;
       typeNextChar();
     } else if (!typewriterTimer && isTypewriterRunning && charQueue.length > 0) {
-      // 如果定时器停了但队列有内容，重启
       typeNextChar();
     }
   }
@@ -207,19 +189,43 @@
     activeBubble = null;
   }
 
-  function init() {
-    // 启动遮罩：确保页面内容加载完成后再淡出，彻底消除闪屏
+  // ========== 激进离线缓存：彻底消除加载闪烁 ==========
+  if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      setTimeout(() => {
-        if (splashScreen) {
-          splashScreen.style.opacity = '0';
-          setTimeout(() => {
-            if (splashScreen) splashScreen.style.display = 'none';
-          }, 400);
-        }
-      }, 600); // 给足渲染时间
-    });
+      navigator.serviceWorker.register('data:application/javascript;base64,' + btoa(`
+        const CACHE_NAME = 'echo-v2';
+        const urlsToCache = [
+          '/echo/',
+          '/echo/index.html'
+        ];
 
+        self.addEventListener('install', event => {
+          event.waitUntil(
+            caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+          );
+        });
+
+        self.addEventListener('fetch', event => {
+          event.respondWith(
+            caches.match(event.request).then(response => response || fetch(event.request))
+          );
+        });
+
+        self.addEventListener('activate', event => {
+          event.waitUntil(
+            caches.keys().then(cacheNames => {
+              return Promise.all(
+                cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
+              );
+            })
+          );
+        });
+      `));
+    });
+  }
+
+  // ========== 初始化 ==========
+  function init() {
     const savedKey = getApiKey();
     if (savedKey) {
       showChat();
@@ -279,7 +285,6 @@
     chatLog.appendChild(assistantBubble);
     chatLog.scrollTop = chatLog.scrollHeight;
 
-    // 启动打字机（此时队列为空，等待字符推入）
     startTypewriter(assistantBubble);
 
     const chatHistory = getChatHistory();
@@ -333,7 +338,6 @@
               const delta = data.choices[0].delta;
               if (delta && delta.content) {
                 fullReply += delta.content;
-                // 只推入新增的字符到队列，不打乱节奏
                 pushChars(delta.content);
                 setStatus('');
               }
@@ -342,7 +346,7 @@
         }
       }
 
-      // 等待队列消费完毕
+      // 等待队列清空
       while (charQueue.length > 0) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
