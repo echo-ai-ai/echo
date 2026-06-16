@@ -40,7 +40,6 @@
       display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: #8b7a6b;
     }
     #header button { background: none; border: none; font-size: 0.8rem; color: #8b7a6b; cursor: pointer; }
-    /* 开关容器 */
     .toggle-container {
       display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #8b7a6b;
     }
@@ -215,22 +214,50 @@
   const toggleSwitch = document.getElementById('toggle-switch');
   const toggleLabel = document.getElementById('toggle-label');
 
-  let isTyping = false;
+  // ========== 流式渲染引擎（修复截断问题） ==========
+  let renderTimer = null;
+  let renderTarget = '';
+  let renderBubble = null;
+  let renderIndex = 0;
+  const RENDER_SPEED = 18; // ms/字符
 
-  function elegantTypewriter(bubble, fullText) {
-    if (isTyping) { bubble.textContent = fullText; return; }
-    isTyping = true;
-    let index = 0;
-    const baseDelay = 18;
-    function typeNextChar() {
-      if (index < fullText.length) {
-        bubble.textContent = fullText.substring(0, index + 1);
+  function startRender(bubble) {
+    stopRender();
+    renderBubble = bubble;
+    renderIndex = bubble.textContent.length;
+    renderTarget = '';
+    scheduleRender();
+  }
+
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      if (renderBubble && renderIndex < renderTarget.length) {
+        renderBubble.textContent = renderTarget.substring(0, renderIndex + 1);
         chatLog.scrollTop = chatLog.scrollHeight;
-        index++;
-        setTimeout(typeNextChar, baseDelay);
-      } else { isTyping = false; }
+        renderIndex++;
+        if (renderIndex < renderTarget.length) {
+          scheduleRender();
+        }
+      }
+    }, RENDER_SPEED);
+  }
+
+  function pushRender(text) {
+    renderTarget += text;
+    scheduleRender();
+  }
+
+  function stopRender(finalText = '') {
+    if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+    if (renderBubble && finalText) {
+      renderBubble.textContent = finalText;
+      chatLog.scrollTop = chatLog.scrollHeight;
     }
-    typeNextChar();
+    renderTarget = '';
+    renderIndex = 0;
+    renderBubble = null;
   }
 
   function init() {
@@ -313,6 +340,9 @@
       ...chatHistory.slice(-20)
     ];
 
+    let fullReply = '';
+    startRender(assistantBubble);
+
     try {
       const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
@@ -327,7 +357,6 @@
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let fullReply = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -343,7 +372,7 @@
               const delta = data.choices[0].delta;
               if (delta && delta.content) {
                 fullReply += delta.content;
-                elegantTypewriter(assistantBubble, fullReply);
+                pushRender(delta.content);
                 setStatus('');
               }
             } catch(e) {}
@@ -351,11 +380,17 @@
         }
       }
 
+      // 等待渲染完成
+      while (renderTarget.length > 0 && renderBubble && renderIndex < renderTarget.length) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      stopRender(fullReply);
+
       chatHistory.push({ role: 'assistant', content: fullReply });
       saveChatHistory(chatHistory);
       setStatus('');
     } catch (e) {
-      isTyping = false;
+      stopRender(fullReply || assistantBubble.textContent);
       assistantBubble.textContent = `我好像走神了… 可能是网络不太好，你等等我再试试。`;
       setStatus('');
     } finally {
