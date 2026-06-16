@@ -16,7 +16,6 @@
       -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased;
       overscroll-behavior: none; overflow: hidden;
     }
-    /* 启动遮罩：绝对定位，最高层级，覆盖所有内容 */
     #splash-screen {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #f5f0eb; z-index: 10000; display: flex;
@@ -43,7 +42,6 @@
     }
     #setup-overlay button:active { background: #2c2c2c; }
     #setup-overlay .privacy-note { font-size: 0.8rem; color: #b8a99a; margin-top: 16px; text-align: center; }
-    /* 聊天容器：默认隐藏，初始化完成后才显示 */
     #chat-container { display: none; flex: 1; flex-direction: column; height: 100vh; }
     #chat-container.show { display: flex; }
     #header {
@@ -99,7 +97,6 @@
 </head>
 <body>
 
-<!-- 启动遮罩：始终覆盖，直到初始化完成 -->
 <div id="splash-screen">✨</div>
 
 <div id="setup-overlay">
@@ -226,7 +223,6 @@
   const toggleSwitch = document.getElementById('toggle-switch');
   const toggleLabel = document.getElementById('toggle-label');
 
-  // 渲染引擎
   let renderTimer = null;
   let renderTarget = '';
   let renderBubble = null;
@@ -269,7 +265,6 @@
   }
 
   function init() {
-    // 初始化开关状态
     if (isNewMode()) {
       toggleSwitch.classList.add('active');
       toggleLabel.textContent = '接住·超越·引领 (开)';
@@ -290,10 +285,8 @@
       }
     });
 
-    // 同步恢复状态，确保无刷新
     const savedKey = getApiKey();
     if (savedKey) {
-      // 先渲染聊天历史
       const history = getChatHistory();
       chatLog.innerHTML = '';
       history.forEach(msg => {
@@ -302,19 +295,18 @@
         bubble.textContent = msg.content;
         chatLog.appendChild(bubble);
       });
-      chatLog.scrollTop = chatLog.scrollHeight;
-      // 显示聊天界面
       chatContainer.classList.add('show');
       setupOverlay.classList.remove('show');
+      // 延迟滚动到底部，确保 DOM 已完全渲染
+      setTimeout(() => {
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }, 100);
     } else {
-      // 显示设置界面
       setupOverlay.classList.add('show');
       chatContainer.classList.remove('show');
     }
 
-    // 隐藏启动遮罩
     splashScreen.classList.add('hide');
-    // 恢复滚动
     document.body.style.overflow = '';
 
     if (!window.matchMedia('(display-mode: standalone)').matches) {
