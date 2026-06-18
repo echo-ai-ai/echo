@@ -340,40 +340,58 @@
   function copyBubbleText(bubble) {
     const text = bubble.textContent.trim();
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          bubble.style.opacity = '0.5';
+          setTimeout(() => { bubble.style.opacity = '1'; }, 200);
+        }).catch(() => {
+          fallbackCopy(text, bubble);
+        });
+      } else {
+        fallbackCopy(text, bubble);
+      }
+    } catch(e) {
+      fallbackCopy(text, bubble);
+    }
+  }
+
+  function fallbackCopy(text, bubble) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    if (bubble) {
       bubble.style.opacity = '0.5';
       setTimeout(() => { bubble.style.opacity = '1'; }, 200);
-    }).catch(() => {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      bubble.style.opacity = '0.5';
-      setTimeout(() => { bubble.style.opacity = '1'; }, 200);
-    });
+    }
   }
 
   function attachLongPress(bubble) {
-    bubble.addEventListener('touchstart', function(e) {
-      longPressTimer = setTimeout(() => {
-        e.preventDefault();
-        copyBubbleText(bubble);
-      }, 500);
-    });
-    bubble.addEventListener('touchend', function() { clearTimeout(longPressTimer); });
-    bubble.addEventListener('touchmove', function() { clearTimeout(longPressTimer); });
-    bubble.addEventListener('mousedown', function(e) {
-      longPressTimer = setTimeout(() => {
-        e.preventDefault();
-        copyBubbleText(bubble);
-      }, 500);
-    });
-    bubble.addEventListener('mouseup', function() { clearTimeout(longPressTimer); });
-    bubble.addEventListener('mouseleave', function() { clearTimeout(longPressTimer); });
+    try {
+      bubble.addEventListener('touchstart', function(e) {
+        longPressTimer = setTimeout(() => {
+          e.preventDefault();
+          copyBubbleText(bubble);
+        }, 500);
+      });
+      bubble.addEventListener('touchend', function() { clearTimeout(longPressTimer); });
+      bubble.addEventListener('touchmove', function() { clearTimeout(longPressTimer); });
+      bubble.addEventListener('mousedown', function(e) {
+        longPressTimer = setTimeout(() => {
+          e.preventDefault();
+          copyBubbleText(bubble);
+        }, 500);
+      });
+      bubble.addEventListener('mouseup', function() { clearTimeout(longPressTimer); });
+      bubble.addEventListener('mouseleave', function() { clearTimeout(longPressTimer); });
+    } catch(e) {
+      console.log('attachLongPress error:', e);
+    }
   }
 
   function init() {
