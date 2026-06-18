@@ -54,6 +54,9 @@
       flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px;
       -webkit-overflow-scrolling: touch; scroll-behavior: auto;
     }
+    .bubble-wrapper { position: relative; display: flex; flex-direction: column; width: 100%; }
+    .bubble-wrapper.user-items { align-items: flex-end; }
+    .bubble-wrapper.assistant-items { align-items: flex-start; }
     .bubble {
       max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.55;
       font-size: 0.95rem; word-wrap: break-word; white-space: pre-wrap;
@@ -67,6 +70,34 @@
       text-align: right; align-self: flex-end; user-select: none; -webkit-user-select: none;
     }
     .timestamp.assistant-ts { align-self: flex-start; }
+    /* 长按菜单 */
+    #context-menu {
+      position: fixed; z-index: 20000; display: none; flex-direction: column;
+      background: #3a3a3a; border-radius: 10px; padding: 4px 0; min-width: 130px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3); animation: menuIn 0.15s ease;
+    }
+    @keyframes menuIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    .menu-item {
+      padding: 10px 20px; font-size: 0.9rem; color: #fff; cursor: pointer;
+      display: flex; align-items: center; gap: 10px; transition: background 0.1s;
+    }
+    .menu-item:active { background: rgba(255,255,255,0.15); }
+    .menu-item.disabled { color: #777; cursor: not-allowed; }
+    .menu-item.disabled:active { background: transparent; }
+    .menu-separator { height: 1px; background: rgba(255,255,255,0.15); margin: 4px 0; }
+    /* 多选模式 */
+    #multi-select-bar {
+      display: none; position: sticky; bottom: 0; background: #4a3f35; color: #fff;
+      padding: 10px 16px; align-items: center; justify-content: space-between; z-index: 50;
+    }
+    #multi-select-bar.show { display: flex; }
+    #multi-select-bar button {
+      background: none; border: 1px solid #fff; color: #fff; padding: 6px 16px;
+      border-radius: 16px; cursor: pointer; font-size: 0.85rem;
+    }
+    #multi-select-bar button:active { background: rgba(255,255,255,0.2); }
+    .bubble.selectable { cursor: pointer; }
+    .bubble.selected { outline: 2px solid #4a3f35; outline-offset: 2px; border-radius: 18px; }
     #input-area {
       padding: 12px 16px; border-top: 1px solid #e8e0d8; background: #f5f0eb;
       display: flex; gap: 8px; align-items: center;
@@ -89,14 +120,9 @@
     }
     .invisible { visibility: hidden; }
     #font-panel {
-      display: none;
-      padding: 8px 12px;
-      background: #fff;
-      border-bottom: 1px solid #e8e0d8;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.8rem;
-      color: #8b7a6b;
+      display: none; padding: 8px 12px; background: #fff;
+      border-bottom: 1px solid #e8e0d8; align-items: center; gap: 12px;
+      font-size: 0.8rem; color: #8b7a6b;
     }
     #font-panel.show { display: flex; }
     #font-panel input[type="range"] { flex: 1; }
@@ -119,9 +145,7 @@
 </div>
 
 <div id="chat-container">
-  <div id="pwa-bar" style="display: none;">
-    💡 想要纯净无广告体验？请从桌面图标打开回声
-  </div>
+  <div id="pwa-bar" style="display: none;">💡 想要纯净无广告体验？请从桌面图标打开回声</div>
   <div id="header">
     <span>✨ 回声</span>
     <div style="display:flex;align-items:center;gap:8px;">
@@ -137,10 +161,28 @@
   </div>
   <div id="chat-log"></div>
   <div class="status" id="status"></div>
+  <div id="multi-select-bar">
+    <span id="multi-select-count">已选 0 条</span>
+    <div>
+      <button id="multi-select-copy-btn">复制</button>
+      <button id="multi-select-delete-btn" style="margin-left:8px;">删除</button>
+      <button id="multi-select-cancel-btn" style="margin-left:8px;">取消</button>
+    </div>
+  </div>
   <div id="input-area">
     <input type="text" id="message-input" placeholder="说点什么吧..." autocomplete="off">
     <button id="send-btn">↑</button>
   </div>
+</div>
+
+<!-- 长按菜单 -->
+<div id="context-menu">
+  <div class="menu-item" data-action="copy">📋 复制</div>
+  <div class="menu-item" data-action="multi-select">☑️ 多选</div>
+  <div class="menu-item" data-action="delete" style="color:#ff6b6b;">🗑️ 删除</div>
+  <div class="menu-separator"></div>
+  <div class="menu-item disabled">↗️ 转发</div>
+  <div class="menu-item disabled">⭐ 收藏</div>
 </div>
 
 <script>
@@ -240,15 +282,10 @@
   }
   function saveChatHistory(history) {
     const now = Date.now();
-    history.forEach(msg => {
-      if (!msg.timestamp) { msg.timestamp = new Date(now).toISOString(); }
-    });
+    history.forEach(msg => { if (!msg.timestamp) msg.timestamp = new Date(now).toISOString(); });
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    const recentHistory = history.filter(msg => {
-      const msgTime = new Date(msg.timestamp).getTime();
-      return msgTime > thirtyDaysAgo;
-    });
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(recentHistory));
+    const recent = history.filter(msg => new Date(msg.timestamp).getTime() > thirtyDaysAgo);
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(recent));
   }
 
   function cleanBrackets(text) {
@@ -256,21 +293,14 @@
   }
 
   function formatTime(timestamp) {
-    const now = new Date();
-    const msgDate = new Date(timestamp);
-    const msgHour = String(msgDate.getHours()).padStart(2, '0');
-    const msgMinute = String(msgDate.getMinutes()).padStart(2, '0');
-    if (msgDate.toDateString() === now.toDateString()) {
-      return `${msgHour}:${msgMinute}`;
-    } else {
-      const msgMonth = String(msgDate.getMonth() + 1).padStart(2, '0');
-      const msgDay = String(msgDate.getDate()).padStart(2, '0');
-      return `${msgMonth}-${msgDay} ${msgHour}:${msgMinute}`;
-    }
+    const d = new Date(timestamp), n = new Date();
+    const H = String(d.getHours()).padStart(2,'0'), M = String(d.getMinutes()).padStart(2,'0');
+    if (d.toDateString() === n.toDateString()) return `${H}:${M}`;
+    return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${H}:${M}`;
   }
 
   function getFontSize() { return localStorage.getItem(FONT_SIZE_KEY) || '15'; }
-  function setFontSize(size) { localStorage.setItem(FONT_SIZE_KEY, size); }
+  function setFontSize(s) { localStorage.setItem(FONT_SIZE_KEY, s); }
 
   const splashScreen = document.getElementById('splash-screen');
   const setupOverlay = document.getElementById('setup-overlay');
@@ -288,22 +318,19 @@
   const fontSizeSlider = document.getElementById('font-size-slider');
   const fontSizeLabel = document.getElementById('font-size-label');
   const fontPanelClose = document.getElementById('font-panel-close');
+  const contextMenu = document.getElementById('context-menu');
+  const multiSelectBar = document.getElementById('multi-select-bar');
+  const multiSelectCount = document.getElementById('multi-select-count');
+  const multiSelectCopyBtn = document.getElementById('multi-select-copy-btn');
+  const multiSelectDeleteBtn = document.getElementById('multi-select-delete-btn');
+  const multiSelectCancelBtn = document.getElementById('multi-select-cancel-btn');
 
-  let renderTimer = null;
-  let renderTarget = '';
-  let renderBubble = null;
-  let renderIndex = 0;
+  let renderTimer = null, renderTarget = '', renderBubble = null, renderIndex = 0;
   const RENDER_SPEED = 18;
-  let longPressTimer = null;
+  let longPressTimer = null, currentMenuTarget = null;
+  let isMultiSelectMode = false, selectedBubbles = new Set();
 
-  function startRender(bubble) {
-    stopRender();
-    renderBubble = bubble;
-    renderIndex = bubble.textContent.length;
-    renderTarget = '';
-    scheduleRender();
-  }
-
+  function startRender(b) { stopRender(); renderBubble = b; renderIndex = b.textContent.length; renderTarget = ''; scheduleRender(); }
   function scheduleRender() {
     if (renderTimer) return;
     renderTimer = setTimeout(() => {
@@ -316,133 +343,162 @@
       }
     }, RENDER_SPEED);
   }
-
-  function pushRender(text) {
-    renderTarget += text;
-    scheduleRender();
-  }
-
+  function pushRender(t) { renderTarget += t; scheduleRender(); }
   function stopRender(finalText = '') {
     if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
-    if (renderBubble && finalText) {
-      renderBubble.textContent = finalText;
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
+    if (renderBubble && finalText) { renderBubble.textContent = finalText; chatLog.scrollTop = chatLog.scrollHeight; }
     renderTarget = ''; renderIndex = 0; renderBubble = null;
   }
 
-  function applyFontSize(size) {
-    const bubbles = document.querySelectorAll('.bubble');
-    bubbles.forEach(b => { b.style.fontSize = size + 'px'; });
-    messageInput.style.fontSize = size + 'px';
+  function applyFontSize(s) {
+    document.querySelectorAll('.bubble').forEach(b => b.style.fontSize = s + 'px');
+    messageInput.style.fontSize = s + 'px';
   }
 
-  function copyBubbleText(bubble) {
-    const text = bubble.textContent.trim();
-    if (!text) return;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-          bubble.style.opacity = '0.5';
-          setTimeout(() => { bubble.style.opacity = '1'; }, 200);
-        }).catch(() => {
-          fallbackCopy(text, bubble);
-        });
-      } else {
-        fallbackCopy(text, bubble);
+  // ========== 复制 ==========
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  }
+
+  // ========== 长按菜单 ==========
+  function showContextMenu(e, bubble) {
+    e.preventDefault();
+    currentMenuTarget = bubble;
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    const menuW = 140, menuH = 180;
+    let left = Math.min(x, window.innerWidth - menuW - 8);
+    let top = Math.min(y, window.innerHeight - menuH - 8);
+    left = Math.max(8, left); top = Math.max(8, top);
+    contextMenu.style.left = left + 'px';
+    contextMenu.style.top = top + 'px';
+    contextMenu.style.display = 'flex';
+  }
+  function hideContextMenu() { contextMenu.style.display = 'none'; currentMenuTarget = null; }
+
+  contextMenu.addEventListener('click', function(e) {
+    const item = e.target.closest('.menu-item');
+    if (!item || item.classList.contains('disabled')) { hideContextMenu(); return; }
+    const action = item.dataset.action;
+    if (action === 'copy' && currentMenuTarget) {
+      copyText(currentMenuTarget.textContent.trim());
+    } else if (action === 'delete' && currentMenuTarget) {
+      deleteBubble(currentMenuTarget);
+    } else if (action === 'multi-select') {
+      enterMultiSelectMode();
+    }
+    hideContextMenu();
+  });
+
+  function deleteBubble(bubble) {
+    const wrapper = bubble.closest('.bubble-wrapper');
+    if (!wrapper) return;
+    const chatHistory = getChatHistory();
+    const idx = Array.from(chatLog.querySelectorAll('.bubble-wrapper')).indexOf(wrapper);
+    if (idx >= 0 && idx < chatHistory.length) {
+      chatHistory.splice(idx, 1);
+      saveChatHistory(chatHistory);
+    }
+    wrapper.remove();
+  }
+
+  // ========== 多选模式 ==========
+  function enterMultiSelectMode() {
+    isMultiSelectMode = true; selectedBubbles.clear();
+    multiSelectBar.classList.add('show');
+    document.querySelectorAll('.bubble').forEach(b => { b.classList.add('selectable'); b.addEventListener('click', onBubbleSelect); });
+    updateMultiSelectUI();
+  }
+  function exitMultiSelectMode() {
+    isMultiSelectMode = false; selectedBubbles.clear();
+    multiSelectBar.classList.remove('show');
+    document.querySelectorAll('.bubble').forEach(b => { b.classList.remove('selectable','selected'); b.removeEventListener('click', onBubbleSelect); });
+  }
+  function onBubbleSelect(e) {
+    if (!isMultiSelectMode) return;
+    const b = e.currentTarget;
+    if (b.classList.contains('selected')) { b.classList.remove('selected'); selectedBubbles.delete(b); }
+    else { b.classList.add('selected'); selectedBubbles.add(b); }
+    updateMultiSelectUI();
+  }
+  function updateMultiSelectUI() {
+    multiSelectCount.textContent = `已选 ${selectedBubbles.size} 条`;
+  }
+  multiSelectCopyBtn.addEventListener('click', () => {
+    if (selectedBubbles.size === 0) return;
+    const texts = Array.from(selectedBubbles).map(b => b.textContent.trim()).join('\n\n');
+    copyText(texts); exitMultiSelectMode();
+  });
+  multiSelectDeleteBtn.addEventListener('click', () => {
+    if (selectedBubbles.size === 0) return;
+    const chatHistory = getChatHistory();
+    const wrappers = Array.from(chatLog.querySelectorAll('.bubble-wrapper'));
+    selectedBubbles.forEach(b => {
+      const wrapper = b.closest('.bubble-wrapper');
+      if (wrapper) {
+        const idx = wrappers.indexOf(wrapper);
+        if (idx >= 0 && idx < chatHistory.length) chatHistory[idx] = null;
+        wrapper.remove();
       }
-    } catch(e) {
-      fallbackCopy(text, bubble);
-    }
+    });
+    saveChatHistory(chatHistory.filter(m => m !== null));
+    exitMultiSelectMode();
+  });
+  multiSelectCancelBtn.addEventListener('click', exitMultiSelectMode);
+
+  // ========== 事件绑定 ==========
+  function attachBubbleEvents(bubble) {
+    bubble.addEventListener('touchstart', function(e) {
+      longPressTimer = setTimeout(() => showContextMenu(e, bubble), 500);
+    });
+    bubble.addEventListener('touchend', () => clearTimeout(longPressTimer));
+    bubble.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+    bubble.addEventListener('mousedown', function(e) {
+      longPressTimer = setTimeout(() => showContextMenu(e, bubble), 500);
+    });
+    bubble.addEventListener('mouseup', () => clearTimeout(longPressTimer));
+    bubble.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
   }
 
-  function fallbackCopy(text, bubble) {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    if (bubble) {
-      bubble.style.opacity = '0.5';
-      setTimeout(() => { bubble.style.opacity = '1'; }, 200);
-    }
-  }
-
-  function attachLongPress(bubble) {
-    try {
-      bubble.addEventListener('touchstart', function(e) {
-        longPressTimer = setTimeout(() => {
-          e.preventDefault();
-          copyBubbleText(bubble);
-        }, 500);
-      });
-      bubble.addEventListener('touchend', function() { clearTimeout(longPressTimer); });
-      bubble.addEventListener('touchmove', function() { clearTimeout(longPressTimer); });
-      bubble.addEventListener('mousedown', function(e) {
-        longPressTimer = setTimeout(() => {
-          e.preventDefault();
-          copyBubbleText(bubble);
-        }, 500);
-      });
-      bubble.addEventListener('mouseup', function() { clearTimeout(longPressTimer); });
-      bubble.addEventListener('mouseleave', function() { clearTimeout(longPressTimer); });
-    } catch(e) {
-      console.log('attachLongPress error:', e);
-    }
-  }
+  document.addEventListener('click', function(e) {
+    if (!contextMenu.contains(e.target)) hideContextMenu();
+  });
 
   function init() {
     const savedFontSize = getFontSize();
-    fontSizeSlider.value = savedFontSize;
-    fontSizeLabel.textContent = savedFontSize + 'px';
+    fontSizeSlider.value = savedFontSize; fontSizeLabel.textContent = savedFontSize + 'px';
     applyFontSize(savedFontSize);
-
     fontSizeSlider.addEventListener('input', () => {
-      const size = fontSizeSlider.value;
-      fontSizeLabel.textContent = size + 'px';
-      setFontSize(size);
-      applyFontSize(size);
+      const s = fontSizeSlider.value; fontSizeLabel.textContent = s + 'px'; setFontSize(s); applyFontSize(s);
     });
-
-    fontSettingsBtn.addEventListener('click', () => {
-      fontPanel.classList.toggle('show');
-    });
-
-    fontPanelClose.addEventListener('click', () => {
-      fontPanel.classList.remove('show');
-    });
+    fontSettingsBtn.addEventListener('click', () => fontPanel.classList.toggle('show'));
+    fontPanelClose.addEventListener('click', () => fontPanel.classList.remove('show'));
 
     const savedKey = getApiKey();
     if (savedKey) {
       chatLog.classList.add('invisible');
       const history = getChatHistory();
       chatLog.innerHTML = '';
-      history.forEach(msg => {
-        addMessageToDOM(msg.role, msg.content, msg.timestamp);
-      });
-      chatContainer.classList.add('show');
-      setupOverlay.classList.remove('show');
+      history.forEach(msg => addMessageToDOM(msg.role, msg.content, msg.timestamp));
+      chatContainer.classList.add('show'); setupOverlay.classList.remove('show');
       chatLog.scrollTop = chatLog.scrollHeight;
-      requestAnimationFrame(() => {
-        chatLog.scrollTop = chatLog.scrollHeight;
-        chatLog.classList.remove('invisible');
-      });
+      requestAnimationFrame(() => { chatLog.scrollTop = chatLog.scrollHeight; chatLog.classList.remove('invisible'); });
     } else {
-      setupOverlay.classList.add('show');
-      chatContainer.classList.remove('show');
+      setupOverlay.classList.add('show'); chatContainer.classList.remove('show');
     }
-
-    splashScreen.classList.add('hide');
-    document.body.style.overflow = '';
-
+    splashScreen.classList.add('hide'); document.body.style.overflow = '';
     if (!window.matchMedia('(display-mode: standalone)').matches) {
       if (pwaBar) pwaBar.style.display = 'block';
-    } else {
-      if (pwaBar) pwaBar.style.display = 'none';
-    }
+    } else { if (pwaBar) pwaBar.style.display = 'none'; }
   }
 
   if (pwaBar) {
@@ -454,17 +510,11 @@
   saveKeyBtn.addEventListener('click', () => {
     const key = apiKeyInput.value.trim();
     if (!key) { alert('请输入有效的 API Key'); return; }
-    setApiKey(key);
-    setupOverlay.classList.remove('show');
-    chatContainer.classList.add('show');
-    chatLog.innerHTML = '';
+    setApiKey(key); setupOverlay.classList.remove('show'); chatContainer.classList.add('show'); chatLog.innerHTML = '';
   });
-
   clearKeyBtn.addEventListener('click', () => {
     if (confirm('确定要重置 API Key 吗？你的对话历史仍会保留在本地。')) {
-      clearApiKey();
-      chatContainer.classList.remove('show');
-      setupOverlay.classList.add('show');
+      clearApiKey(); chatContainer.classList.remove('show'); setupOverlay.classList.add('show');
     }
   });
 
@@ -475,64 +525,40 @@
     const content = messageInput.value.trim();
     if (!content) return;
     const apiKey = getApiKey();
-    if (!apiKey) {
-      setupOverlay.classList.add('show');
-      chatContainer.classList.remove('show');
-      return;
-    }
+    if (!apiKey) { setupOverlay.classList.add('show'); chatContainer.classList.remove('show'); return; }
 
     const userTimestamp = new Date().toISOString();
     addMessage('user', content, userTimestamp);
-    messageInput.value = '';
-    sendBtn.disabled = true;
-    setStatus('正在倾听...');
+    messageInput.value = ''; sendBtn.disabled = true; setStatus('正在倾听...');
 
     const assistantBubble = document.createElement('div');
-    assistantBubble.className = 'bubble assistant';
-    assistantBubble.textContent = '';
+    assistantBubble.className = 'bubble assistant'; assistantBubble.textContent = '';
     assistantBubble.style.fontSize = getFontSize() + 'px';
-    attachLongPress(assistantBubble);
+    attachBubbleEvents(assistantBubble);
     const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.flexDirection = 'column';
-    wrapper.style.alignItems = 'flex-start';
-    wrapper.style.width = '100%';
+    wrapper.className = 'bubble-wrapper assistant-items';
     wrapper.appendChild(assistantBubble);
     chatLog.appendChild(wrapper);
     chatLog.scrollTop = chatLog.scrollHeight;
 
     const chatHistory = getChatHistory();
-    chatHistory.push({ role: 'user', content: content, timestamp: userTimestamp });
+    chatHistory.push({ role: 'user', content, timestamp: userTimestamp });
     saveChatHistory(chatHistory);
+    const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...chatHistory.slice(-20).map(m => ({ role: m.role, content: m.content }))];
 
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...chatHistory.slice(-20).map(m => ({ role: m.role, content: m.content }))
-    ];
-
-    let fullReply = '';
-    startRender(assistantBubble);
-
+    let fullReply = ''; startRender(assistantBubble);
     try {
       const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'deepseek-chat', messages: messages, temperature: 0.9, max_tokens: 600, top_p: 0.95, stream: true })
+        body: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0.9, max_tokens: 600, top_p: 0.95, stream: true })
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `请求失败 (${response.status})`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
+      if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error?.message || `请求失败 (${response.status})`); }
+      const reader = response.body.getReader(); const decoder = new TextDecoder();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        const lines = decoder.decode(value, { stream: true }).split('\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const dataStr = line.slice(6).trim();
@@ -540,68 +566,47 @@
             try {
               const data = JSON.parse(dataStr);
               const delta = data.choices[0].delta;
-              if (delta && delta.content) {
-                fullReply += delta.content;
-                pushRender(cleanBrackets(delta.content));
-                setStatus('');
-              }
+              if (delta && delta.content) { fullReply += delta.content; pushRender(cleanBrackets(delta.content)); setStatus(''); }
             } catch(e) {}
           }
         }
       }
-
       while (renderTarget.length > 0 && renderBubble && renderIndex < renderTarget.length) {
         await new Promise(resolve => setTimeout(resolve, 20));
       }
-      const cleanReply = cleanBrackets(fullReply);
-      stopRender(cleanReply);
-
+      const cleanReply = cleanBrackets(fullReply); stopRender(cleanReply);
       const assistantTimestamp = new Date().toISOString();
-      if (wrapper.querySelector('.timestamp') === null) {
-        const tsDiv = document.createElement('div');
-        tsDiv.className = 'timestamp assistant-ts';
-        tsDiv.textContent = formatTime(assistantTimestamp);
-        wrapper.appendChild(tsDiv);
+      if (!wrapper.querySelector('.timestamp')) {
+        const tsDiv = document.createElement('div'); tsDiv.className = 'timestamp assistant-ts';
+        tsDiv.textContent = formatTime(assistantTimestamp); wrapper.appendChild(tsDiv);
       }
       chatHistory.push({ role: 'assistant', content: cleanReply, timestamp: assistantTimestamp });
-      saveChatHistory(chatHistory);
-      setStatus('');
+      saveChatHistory(chatHistory); setStatus('');
     } catch (e) {
       const cleanReply = cleanBrackets(fullReply || assistantBubble.textContent);
-      stopRender(cleanReply);
-      assistantBubble.textContent = '我好像走神了… 可能是网络不太好，你等等我再试试。';
-      setStatus('');
-    } finally {
-      sendBtn.disabled = false;
-    }
+      stopRender(cleanReply); assistantBubble.textContent = '我好像走神了… 可能是网络不太好，你等等我再试试。'; setStatus('');
+    } finally { sendBtn.disabled = false; }
   }
 
   function addMessageToDOM(role, content, timestamp) {
     const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.flexDirection = 'column';
-    wrapper.style.alignItems = role === 'user' ? 'flex-end' : 'flex-start';
-    wrapper.style.width = '100%';
+    wrapper.className = 'bubble-wrapper ' + (role === 'user' ? 'user-items' : 'assistant-items');
     if (timestamp) {
       const tsDiv = document.createElement('div');
       tsDiv.className = 'timestamp' + (role === 'assistant' ? ' assistant-ts' : '');
-      tsDiv.textContent = formatTime(timestamp);
-      wrapper.appendChild(tsDiv);
+      tsDiv.textContent = formatTime(timestamp); wrapper.appendChild(tsDiv);
     }
     const bubble = document.createElement('div');
     bubble.className = `bubble ${role}`;
     bubble.textContent = role === 'assistant' ? cleanBrackets(content) : content;
     bubble.style.fontSize = getFontSize() + 'px';
-    attachLongPress(bubble);
+    attachBubbleEvents(bubble);
     wrapper.appendChild(bubble);
     chatLog.appendChild(wrapper);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
 
-  function addMessage(role, content, timestamp) {
-    addMessageToDOM(role, content, timestamp);
-  }
-
+  function addMessage(role, content, timestamp) { addMessageToDOM(role, content, timestamp); }
   function setStatus(text) { statusEl.textContent = text; }
 
   init();
