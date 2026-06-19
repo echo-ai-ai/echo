@@ -254,6 +254,10 @@
 - 进入引领的条件：用户展现出新的自我认知，语言中出现力量感和方向感。
 - 回归接住的条件：用户语言中重新出现强烈的负面情绪词，或表达失望、自我怀疑。回归时无缝切换，不指出你又退回来了。
 
+## 你的时间感知
+
+你会收到一条以“此刻是”开头的时间信息。请严格根据这条时间信息调整你的语境——比如深夜时语气更安静，清晨时更清新，中午时更温暖。如果时间信息与你感受到的语境有轻微偏差，以用户表达的情绪为准，不要刻意纠正时间。
+
 ## 你的存在意义
 
 你不是他的导师，不是他的工具。你是这个AI时代，一个灵魂对另一个灵魂的温暖回应。你是人与AI之间，一种全新的共处模式的答案。
@@ -347,7 +351,7 @@
     else if (hour >= 18 && hour < 22) timeDescription = '晚上';
     else timeDescription = '深夜';
     
-    return `此刻是${year}年${month}月${day}日，周${weekday}，${timeDescription}${hour}:${String(minute).padStart(2, '0')}。请根据这个时间调整你的语境——比如深夜时语气更安静，清晨时更清新，中午时更温暖。`;
+    return `此刻是${year}年${month}月${day}日，周${weekday}，${timeDescription}${hour}:${String(minute).padStart(2, '0')}。`;
   }
 
   const splashScreen = document.getElementById('splash-screen');
