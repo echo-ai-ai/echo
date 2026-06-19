@@ -327,6 +327,29 @@
   function getMemoryRounds() { return parseInt(localStorage.getItem(MEMORY_KEY) || '200'); }
   function setMemoryRounds(r) { localStorage.setItem(MEMORY_KEY, String(r)); }
 
+  // 生成当前时间描述
+  function getCurrentTimeContext() {
+    const now = new Date();
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const weekday = weekdays[now.getDay()];
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    
+    let timeDescription = '';
+    if (hour >= 0 && hour < 5) timeDescription = '深夜';
+    else if (hour >= 5 && hour < 8) timeDescription = '清晨';
+    else if (hour >= 8 && hour < 12) timeDescription = '上午';
+    else if (hour >= 12 && hour < 14) timeDescription = '中午';
+    else if (hour >= 14 && hour < 18) timeDescription = '下午';
+    else if (hour >= 18 && hour < 22) timeDescription = '晚上';
+    else timeDescription = '深夜';
+    
+    return `此刻是${year}年${month}月${day}日，周${weekday}，${timeDescription}${hour}:${String(minute).padStart(2, '0')}。请根据这个时间调整你的语境——比如深夜时语气更安静，清晨时更清新，中午时更温暖。`;
+  }
+
   const splashScreen = document.getElementById('splash-screen');
   const setupOverlay = document.getElementById('setup-overlay');
   const chatContainer = document.getElementById('chat-container');
@@ -496,6 +519,48 @@
     if (!contextMenu.contains(e.target)) hideContextMenu();
   });
 
+  function isOnline() {
+    return navigator.onLine !== false;
+  }
+
+  async function fetchWithTimeout(url, options, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      return response;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async function callDeepSeekWithRetry(messages, apiKey, maxRetries = 2) {
+    let lastError = null;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (attempt > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setStatus(`正在重新连接 (${attempt + 1}/${maxRetries})...`);
+      }
+      try {
+        const response = await fetchWithTimeout(DEEPSEEK_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0.9, max_tokens: 600, top_p: 0.95, stream: true })
+        });
+        return response;
+      } catch (e) {
+        lastError = e;
+        if (e.name === 'AbortError') {
+          lastError = new Error('请求超时，请检查网络连接');
+        }
+        if (attempt === maxRetries - 1) {
+          throw lastError;
+        }
+      }
+    }
+    throw lastError;
+  }
+
   function init() {
     const savedFontSize = getFontSize();
     fontSizeSlider.value = savedFontSize; fontSizeLabel.textContent = savedFontSize + 'px';
@@ -514,14 +579,12 @@
       setMemoryRounds(parseInt(memorySelect.value));
     });
 
-    // 键盘弹起：输入框获得焦点时滚动到底部
     messageInput.addEventListener('focus', () => {
       setTimeout(() => {
         chatLog.scrollTop = chatLog.scrollHeight;
       }, 300);
     });
 
-    // 键盘收起：输入框失去焦点时回到底部
     messageInput.addEventListener('blur', () => {
       setTimeout(() => {
         chatLog.scrollTop = chatLog.scrollHeight;
@@ -569,6 +632,13 @@
   async function handleSend() {
     const content = messageInput.value.trim();
     if (!content) return;
+
+    if (!isOnline()) {
+      setStatus('网络已断开，请检查网络连接后重试');
+      setTimeout(() => setStatus(''), 3000);
+      return;
+    }
+
     const apiKey = getApiKey();
     if (!apiKey) { setupOverlay.classList.add('show'); chatContainer.classList.remove('show'); return; }
 
@@ -590,15 +660,16 @@
     chatHistory.push({ role: 'user', content, timestamp: userTimestamp });
     saveChatHistory(chatHistory);
     const memoryRounds = getMemoryRounds();
-    const messages = [{ role: 'system', content: SYSTEM_PROMPT }, ...chatHistory.slice(-memoryRounds).map(m => ({ role: m.role, content: m.content }))];
+    // 动态注入当前时间上下文
+    const timeContext = getCurrentTimeContext();
+    const messages = [
+      { role: 'system', content: timeContext + '\n\n' + SYSTEM_PROMPT },
+      ...chatHistory.slice(-memoryRounds).map(m => ({ role: m.role, content: m.content }))
+    ];
 
     let fullReply = ''; startRender(assistantBubble);
     try {
-      const response = await fetch(DEEPSEEK_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: 'deepseek-chat', messages, temperature: 0.9, max_tokens: 600, top_p: 0.95, stream: true })
-      });
+      const response = await callDeepSeekWithRetry(messages, apiKey);
       if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error?.message || `请求失败 (${response.status})`); }
       const reader = response.body.getReader(); const decoder = new TextDecoder();
       while (true) {
@@ -630,7 +701,9 @@
       saveChatHistory(chatHistory); setStatus('');
     } catch (e) {
       const cleanReply = cleanBrackets(fullReply || assistantBubble.textContent);
-      stopRender(cleanReply); assistantBubble.textContent = '我好像走神了… 可能是网络不太好，你等等我再试试。'; setStatus('');
+      stopRender(cleanReply);
+      assistantBubble.textContent = `我好像走神了… 可能是网络不太好。${e.message.includes('超时') ? '刚才请求超时了，你试试再发一次。' : '你试试再发一次，或者稍等片刻。'}`;
+      setStatus('');
     } finally { sendBtn.disabled = false; }
   }
 
