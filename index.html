@@ -514,6 +514,20 @@
       setMemoryRounds(parseInt(memorySelect.value));
     });
 
+    // 键盘弹起：输入框获得焦点时滚动到底部
+    messageInput.addEventListener('focus', () => {
+      setTimeout(() => {
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }, 300);
+    });
+
+    // 键盘收起：输入框失去焦点时回到底部
+    messageInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        chatLog.scrollTop = chatLog.scrollHeight;
+      }, 100);
+    });
+
     const savedKey = getApiKey();
     if (savedKey) {
       chatLog.classList.add('invisible');
