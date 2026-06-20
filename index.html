@@ -43,6 +43,7 @@
     }
     #setup-overlay button:active { background: #2c2c2c; }
     #setup-overlay .privacy-note { font-size: 0.8rem; color: #b8a99a; margin-top: 16px; text-align: center; }
+    /* --- 聊天容器：标准flex布局 --- */
     #chat-container { display: none; flex: 1; flex-direction: column; height: 100vh; }
     #chat-container.show { display: flex; }
     #header {
@@ -50,10 +51,10 @@
       display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; color: #8b7a6b;
     }
     #header button { background: none; border: none; font-size: 0.8rem; color: #8b7a6b; cursor: pointer; }
+    /* --- 聊天记录区域：自动填充空间 --- */
     #chat-log {
       flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px;
       -webkit-overflow-scrolling: touch; scroll-behavior: auto;
-      padding-bottom: 70px; /* 为固定输入框留出空间 */
     }
     .bubble-wrapper { position: relative; display: flex; flex-direction: column; width: 100%; }
     .bubble-wrapper.user-items { align-items: flex-end; }
@@ -97,13 +98,8 @@
     #multi-select-bar button:active { background: rgba(255,255,255,0.2); }
     .bubble.selectable { cursor: pointer; }
     .bubble.selected { outline: 2px solid #4a3f35; outline-offset: 2px; border-radius: 18px; }
-    /* 输入区固定到底部，键盘弹起时浏览器自动上推 */
+    /* --- 输入区：标准流式布局，不固定 --- */
     #input-area {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
       padding: 12px 16px; border-top: 1px solid #e8e0d8; background: #f5f0eb;
       display: flex; gap: 8px; align-items: center;
     }
